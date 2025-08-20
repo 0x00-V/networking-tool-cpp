@@ -6,10 +6,11 @@
 #include <errno.h>
 #include <iostream>
 #include <string.h>
+#include <sstream>
 #include <sys/select.h>
 #include <netdb.h>
 
-void getUserOptions(std::string &input_address, int &port)
+void getUserOptions(std::string &input_address, int &port_range_start, int &port_range_end)
 {
 
     std::cout << "Enter IP/Hostname: ";
@@ -36,12 +37,27 @@ void getUserOptions(std::string &input_address, int &port)
     input_address = ipstr;
     std::cout << "Selected: " << input_address << "\n";
 
-    std::cout << "Enter a port number: ";
+    std::cout << "Enter a port range (e.g. 1-65535): ";
+    std::string port;
     std::cin >> port;
-    if(port < 1 || port > 65535)
+
+    // extract nums from port input
+    size_t dashIndex = port.find('-');
+    if(dashIndex == std::string::npos)
     {
         freeaddrinfo(res);
-        std::cerr << "Invalid port number. (Between 1-65535)\n";
+        std::cerr << "Invalid port range.\nHINT: 1-65535.\n";
+        exit(EXIT_FAILURE);
+    }
+    std::string str_port_start = port.substr(0, dashIndex);
+    std::string str_port_end = port.substr(dashIndex + 1);
+    std::stringstream(str_port_start) >> port_range_start;
+    std::stringstream(str_port_end) >> port_range_end;
+    
+    if(port_range_start > port_range_end)
+    {
+        freeaddrinfo(res);
+        std::cerr << "Start port must be less than or equal to end port.\n";
         exit(EXIT_FAILURE);
     }
     freeaddrinfo(res);
@@ -52,7 +68,7 @@ void getUserOptions(std::string &input_address, int &port)
 
 
 void port_scan(std::string SERVER_IP, int PORT, int timeout_s=5) {
-    std::cout << "Initiating scan on " << SERVER_IP << PORT << ".\n";
+    //std::cout << "Initiating scan on " << SERVER_IP << PORT << ".\n";
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0)
     {
@@ -101,9 +117,6 @@ void port_scan(std::string SERVER_IP, int PORT, int timeout_s=5) {
         if(so_error == 0)
         {
             std::cout << "[+] "<< PORT << " is open.\n";
-        } else
-        {
-            std::cout << "[-] " << PORT << " is closed.\n";
         }
     } else if (res == 0)
     {
@@ -116,10 +129,16 @@ void port_scan(std::string SERVER_IP, int PORT, int timeout_s=5) {
 int main() {
 
     std::string input_address = "";
-    int port = 0;
+    int port_range_start, port_range_end;
 
-    getUserOptions(input_address, port);
-    port_scan(input_address, port);
+    getUserOptions(input_address, port_range_start, port_range_end);
+
+    std::cout <<  "Initiating scan on " << input_address << " on ports " << port_range_start << " - " << port_range_end << ".\n";
+    for(int i = port_range_start; i <= port_range_end; i++)
+    {
+        port_scan(input_address, i);
+    }
+    
 
     return 0;
 }

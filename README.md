@@ -10,3 +10,9 @@
 - [ ] Banner Grabbing
 - [ ] OS Discovery
 - [ ] Web Scraper
+
+
+## Compile:
+```bash
+g++ main.cpp -o network_tool
+```

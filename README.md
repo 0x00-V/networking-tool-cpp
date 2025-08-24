@@ -1,10 +1,12 @@
-# WIP - Networking Tool
+# Networking Tool
 
 ## To-Do
 
 - [x] Simple port scanner to get grasp of `socket.h` — DONE
-- [x] Port Range
-- [ ] Make nice options menu
+- [x] Add Non-blocking port to run asynchronously to include timeout
+- [x] CLI Arg
+- [x] Input validation
+- [ ] Multi Threaded
 - [ ] Banner Grabbing
 - [ ] OS Discovery
 - [ ] Web Scraper

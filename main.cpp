@@ -14,8 +14,9 @@
     void help(std::string program_name)
     {
         std::cout << "0x00V's Scanner - Version 0.05\n";
-        std::cout << "List";
-        std::cout << "(-t) --target=\n(-p) --port=\n(-pr) --port-range=\nMore options coming soon!\n";
+        std::cout << "Usage: " << program_name << " [Options]\n";
+        std::cout << "\n-----------------------\nTarget Specification\n-----------------------\n  Can pass hostnames and IP addresses.\n  '[-t] --target=<hostname/IP address>\n";
+        std::cout << "\n-----------------------\nPort Specification\n-----------------------\n  Can pass single port or a range of ports.\n  '[-p] --port<1-65535>\n  [-pr] --port-range=<1-65535>\n";
         std::cout << "Example Usage:\n" << program_name << "-t=google.com -pr=1-65535\n";
     }
 

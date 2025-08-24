@@ -21,7 +21,7 @@
         std::cout << "Example Usage:\n" << program_name << "-t=google.com -pr=1-65535\n";
     }
 
-    void processTarget(std::string &target_address)
+    void process_target(std::string &target_address)
     {
         struct addrinfo hints{}, *res;
         hints.ai_family = AF_INET;
@@ -43,7 +43,7 @@
         freeaddrinfo(res);
     }
 
-    void processPortRange(std::string &port_range, int &port_range_start, int &port_range_end)
+    void process_port_range(std::string &port_range, int &port_range_start, int &port_range_end)
     {
         size_t dashIndex = port_range.find('-');
         if(dashIndex == std::string::npos)
@@ -224,7 +224,7 @@
             std::cout << "[E-P-PR] Please provide a target port (e.g. -p=80) or port range (e.g. -pr=1-100).\n";
             return 0;
         } 
-        processTarget(target_address);
+        process_target(target_address);
         std::cout << "Target Address: " << target_address << "\n";
         if(target_port != 0)
         {   
@@ -233,7 +233,7 @@
         } else
         {
             int port_range_start, port_range_end;
-            processPortRange(port_range, port_range_start, port_range_end);
+            process_port_range(port_range, port_range_start, port_range_end);
             std::cout << "Initiating port scan on " << target_address << " on ports " << port_range_start << " - "<<port_range_end << ".\n";
             for(int i = port_range_start; i <= port_range_end; i++)
             {

@@ -15,8 +15,9 @@
     {
         std::cout << "0x00V's Scanner - Version 0.05\n";
         std::cout << "Usage: " << program_name << " [Options]\n";
-        std::cout << "\n-----------------------\nTarget Specification\n-----------------------\n  Can pass hostnames and IP addresses.\n  '[-t] --target=<hostname/IP address>\n";
-        std::cout << "\n-----------------------\nPort Specification\n-----------------------\n  Can pass single port or a range of ports.\n  '[-p] --port<1-65535>\n  [-pr] --port-range=<1-65535>\n";
+        std::cout << "\n-----------------------\nTarget Specification\n-----------------------\n  Can pass hostnames and IP addresses.\n  [-t] --target=<hostname/IP address>\n";
+        std::cout << "\n-----------------------\nPort Specification\n-----------------------\n  Can pass single port or a range of ports.\n  [-p] --port<1-65535>\n  [-pr] --port-range=<1-65535>\n";
+        std::cout << "\n-----------------------\nPort Specification\n-----------------------\n  --banner-grabbing - Enable banner grabbing\n";
         std::cout << "Example Usage:\n" << program_name << "-t=google.com -pr=1-65535\n";
     }
 
@@ -66,62 +67,92 @@
     }
 
 
-    void port_scan(std::string &target_address, int &port, int timeout_s = 1)
+    void port_scan(std::string &target_address, int &port, int timeout_s, bool banner_grabbing)
     {
         int sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if(sockfd < 0)
         {
             std::cout << "[E-SOCK] Failed to create socket";
             exit(EXIT_FAILURE);
-        }
+        } 
 
-        // non-blocking (run socket asynchronously so we can implement timeout)
+        // non-blocking sock
         int flags = fcntl(sockfd, F_GETFL, 0);
         fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
-        struct sockaddr_in server_addr;
-        memset(&server_addr, 0, sizeof(server_addr));
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_port = htons(port);
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port);
+        inet_pton(AF_INET, target_address.c_str(), &addr.sin_addr);
 
-        if(inet_pton(AF_INET, target_address.c_str(), &server_addr.sin_addr) <= 0)
-        {
-            close(sockfd);
-            std::cout << "[E-NOCONN] Invalid address.\n";
-            exit(EXIT_FAILURE);
-        }
-        fd_set writefds;
-        FD_ZERO(&writefds);
-        FD_SET(sockfd, &writefds);
-
-        struct timeval timeout;
-        timeout.tv_sec = timeout_s;
-        timeout.tv_usec = 0;
-
-        int res = connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
+        int res = connect(sockfd, (sockaddr*)&addr, sizeof(addr));
         if(res < 0 && errno != EINPROGRESS)
         {
             close(sockfd);
-            std::cout << "[-] " << port << " is closed.\n"; 
-            exit(EXIT_FAILURE);
-        } 
-
-        res = select(sockfd+1, nullptr, &writefds, nullptr, &timeout);
-        if(res > 0)
-        {
-            int so_error;
-            socklen_t len = sizeof(so_error);
-            getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
-            if(so_error == 0)
-            {
-                std::cout << "[+] " << port << " is open.\n";
-            }
-        } else if (res == 0)
-        {
-            std::cout << "[?] " << port << " timed out/closed.\n";
+            return;
         }
-        close(sockfd);
+
+        fd_set writefds;
+        FD_ZERO(&writefds);
+        FD_SET(sockfd, &writefds);
+        timeval timeout{timeout_s, 0};
+        res = select(sockfd + 1, nullptr, &writefds, nullptr, &timeout);
+
+        if(res <= 0)
+        {
+            close(sockfd);
+            return;
+        }
+
+        int socket_error;
+        socklen_t len = sizeof(socket_error);
+        getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &socket_error, &len);
+        if(socket_error != 0 )
+        {
+            close(sockfd);
+            return;
+        }
+
+        std::cout << "[+] " << port << " open\n";
+        if(banner_grabbing == true)
+        {
+            auto try_read = [&](int timeout_s) -> std::string 
+        {
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(sockfd, &readfds);
+            timeval t{timeout_s, 0};
+            int sel = select(sockfd + 1, &readfds, nullptr, nullptr, &t);
+            if(sel > 0 && FD_ISSET(sockfd, &readfds))
+            {
+                char buf[1024];
+                int n = read(sockfd, buf, sizeof(buf)-1);
+                if(n > 0) {buf[n] = '\0'; return std::string(buf);}
+            }
+            return "";
+        };
+
+        std::string banner = try_read(1);
+
+        if(banner.empty())
+        {
+            const char* probe = nullptr;
+            switch(port) {
+            case 21: probe = "USER anonymous\r\n"; break;
+            case 25: probe = "EHLO example.com\r\n"; break;
+            case 80: probe = "HEAD / HTTP/1.0\r\n\r\n"; break;
+            case 6379: probe = "PING\r\n"; break;
+        }
+        if(probe) write(sockfd, probe, strlen(probe));
+        banner = try_read(2);
     }
+
+    if(!banner.empty()) std::cout << "[Banner] " << banner << "\n";
+        }
+
+    close(sockfd);
+}
+  
 
     int main(int argc, char *argv[]) {
         if(argc == 1)
@@ -133,10 +164,12 @@
         int target_port = 0;
         std::string target_address = "not set";
         std::string port_range = "0";
+        bool banner_grabbing = false;
 
 
         for(int i = 1; i < argc; i++) {
             std::string arg = argv[i];
+            
 
             if(arg == "--help" || arg == "-h") {
                 help(argv[0]);
@@ -173,6 +206,9 @@
                 port_range = arg.substr(4);
                 size_t dash = port_range.find('-');
                 if(dash == std::string::npos) { std::cout << "Invalid port range: " << port_range << "\n"; }
+            }else if(arg.rfind("--banner-grabbing", 0) == 0)
+            {
+                banner_grabbing = true;
             }else {
                 std::cout << "[E-UKA] Unknown argument: " << argv[i] << "\n(Hint: Try \"" << argv[0] << " -h (or --help)\")\n";
                 return 0;
@@ -193,7 +229,7 @@
         if(target_port != 0)
         {   
             std::cout << "Initiating port scan on " << target_address << " on port " << target_port <<  ".\n";
-            port_scan(target_address, target_port);
+            port_scan(target_address, target_port, 1, banner_grabbing);
         } else
         {
             int port_range_start, port_range_end;
@@ -201,7 +237,7 @@
             std::cout << "Initiating port scan on " << target_address << " on ports " << port_range_start << " - "<<port_range_end << ".\n";
             for(int i = port_range_start; i <= port_range_end; i++)
             {
-                port_scan(target_address, i);
+                port_scan(target_address, i, 1, banner_grabbing);
             }
         }
 

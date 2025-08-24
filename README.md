@@ -7,7 +7,7 @@
 - [x] CLI Arg
 - [x] Input validation
 - [ ] Multi Threaded
-- [ ] Banner Grabbing
+- [x] Banner Grabbing
 - [ ] OS Discovery
 - [ ] Web Scraper
 
